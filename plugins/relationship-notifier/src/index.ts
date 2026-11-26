@@ -1,5 +1,5 @@
 // @description Notifies you when you lose a friend, a friend request, a server or a group
-// @version 1.1.0
+// @version 1.2.0
 // @author Ultracord
 
 const FRIEND = 1;
@@ -23,6 +23,8 @@ interface Snapshot {
   friends: Record<string, string>;
   servers: Record<string, string>;
   groups: Record<string, string>;
+  /** Picture URLs by `pictureKey`, for reports about what the cache no longer has. */
+  pictures?: Record<string, string>;
 }
 
 const TEXT: Record<Kind, { title: string; live: string; offline: string }> = {
@@ -59,6 +61,8 @@ function plain(id: unknown): string | null {
 const people = new Map<string, { type: number; name: string }>();
 const servers = new Map<string, string>();
 const groups = new Map<string, string>();
+/** Avatars and icons by `pictureKey`, shown on desktop banners. */
+const pictures = new Map<string, string>();
 const selfActions = new Map<string, number>();
 let me: string | null = null;
 
@@ -69,11 +73,33 @@ function personName(user: { username?: unknown; global_name?: unknown } | null |
   return username ? `@${username}` : display ?? `user ${id}`;
 }
 
+const CDN = 'https://cdn.discordapp.com';
+const HASH = /^(?:a_)?[0-9a-f]{32}$/;
+
+function pictureKey(kind: Kind, id: string): string {
+  return `${kind === 'request' ? 'friend' : kind}:${id}`;
+}
+
+/** A user's avatar, or the default one Discord gives them. */
+function avatar(id: string, hash: unknown): string {
+  if (typeof hash === 'string' && HASH.test(hash)) return `${CDN}/avatars/${id}/${hash}.png?size=80`;
+  return `${CDN}/embed/avatars/${Number((BigInt(id) >> 22n) % 6n)}.png`;
+}
+
+/** A server or group icon, if it has one. */
+function icon(path: 'icons' | 'channel-icons', id: string, hash: unknown): string | undefined {
+  return typeof hash === 'string' && HASH.test(hash) ? `${CDN}/${path}/${id}/${hash}.png?size=80` : undefined;
+}
+
+function setPicture(key: string, url: string | undefined): void {
+  if (url) pictures.set(key, url);
+}
+
 async function loadCache(): Promise<void> {
   const json = (path: string) => `json_extract(CAST(v AS TEXT), '$.${path}')`;
-  const users = new Map<string, { username?: unknown; global_name?: unknown }>();
-  for (const row of await phoenix.stores.sql<{ k: string; username: string; global_name: string }>(
-    `SELECT k, ${json('username')} AS username, ${json('global_name')} AS global_name FROM users`,
+  const users = new Map<string, { username?: unknown; global_name?: unknown; avatar?: unknown }>();
+  for (const row of await phoenix.stores.sql<{ k: string; username: string; global_name: string; avatar: string | null }>(
+    `SELECT k, ${json('username')} AS username, ${json('global_name')} AS global_name, ${json('avatar')} AS avatar FROM users`,
   )) {
     const id = plain(row.k);
     if (id) users.set(id, row);
@@ -82,18 +108,24 @@ async function loadCache(): Promise<void> {
   people.clear();
   for (const row of await phoenix.stores.sql<{ id: string; type: number }>(`SELECT ${json('user_id')} AS id, ${json('type')} AS type FROM relationships`)) {
     const id = plain(row.id);
-    if (id) people.set(id, { type: Number(row.type), name: personName(users.get(id), id) });
+    if (!id) continue;
+    people.set(id, { type: Number(row.type), name: personName(users.get(id), id) });
+    setPicture(pictureKey('friend', id), avatar(id, users.get(id)?.avatar));
   }
 
   servers.clear();
-  for (const row of await phoenix.stores.sql<{ k: string; name: string }>(`SELECT k, ${json('properties.name')} AS name FROM guilds`)) {
+  for (const row of await phoenix.stores.sql<{ k: string; name: string; icon: string | null }>(
+    `SELECT k, ${json('properties.name')} AS name, ${json('properties.icon')} AS icon FROM guilds`,
+  )) {
     const id = plain(row.k);
-    if (id) servers.set(id, typeof row.name === 'string' ? row.name : `server ${id}`);
+    if (!id) continue;
+    servers.set(id, typeof row.name === 'string' ? row.name : `server ${id}`);
+    setPicture(pictureKey('server', id), icon('icons', id, row.icon));
   }
 
   groups.clear();
-  for (const row of await phoenix.stores.sql<{ k: string; name: string | null; recipients: string | null }>(
-    `SELECT k, ${json('name')} AS name, ${json('recipient_ids')} AS recipients FROM channels WHERE ${json('type')} = ${GROUP_DM}`,
+  for (const row of await phoenix.stores.sql<{ k: string; name: string | null; recipients: string | null; icon: string | null }>(
+    `SELECT k, ${json('name')} AS name, ${json('recipient_ids')} AS recipients, ${json('icon')} AS icon FROM channels WHERE ${json('type')} = ${GROUP_DM}`,
   )) {
     const id = plain(row.k);
     if (!id) continue;
@@ -107,13 +139,24 @@ async function loadCache(): Promise<void> {
       }
     }
     groups.set(id, name);
+    setPicture(pictureKey('group', id), icon('channel-icons', id, row.icon));
   }
 }
 
 function snapshot(): Snapshot {
   const friends: Record<string, string> = {};
   for (const [id, person] of people) if (person.type === FRIEND) friends[id] = person.name;
-  return { friends, servers: Object.fromEntries(servers), groups: Object.fromEntries(groups) };
+  const kept: Record<string, string> = {};
+  const keep = (kind: Kind, ids: Iterable<string>) => {
+    for (const id of ids) {
+      const url = pictures.get(pictureKey(kind, id));
+      if (url) kept[pictureKey(kind, id)] = url;
+    }
+  };
+  keep('friend', Object.keys(friends));
+  keep('server', servers.keys());
+  keep('group', groups.keys());
+  return { friends, servers: Object.fromEntries(servers), groups: Object.fromEntries(groups), pictures: kept };
 }
 
 function saveSnapshot(): void {
@@ -138,10 +181,18 @@ function enabled(kind: Kind): boolean {
   return (settings as Record<string, unknown>)[key] !== false;
 }
 
-function report(kind: Kind, name: string, offline = false): void {
+function report(kind: Kind, name: string, offline = false, picture?: string): void {
   if (!enabled(kind)) return;
   const text = TEXT[kind];
-  phoenix.ui.notify({ title: text.title, body: `${name} ${offline ? text.offline : text.live}` });
+  const options = {
+    title: text.title,
+    body: `${name} ${offline ? text.offline : text.live}`,
+    // Drawn on desktop banners by Ultracord's Sunbird build, round for people and groups and square
+    // for servers like Discord does. Other runtimes ignore them.
+    image: picture,
+    imageShape: kind === 'server' ? 'square' : 'circle',
+  };
+  phoenix.ui.notify(options);
   if (me) phoenix.storage.set(`history:${me}`, [{ at: Date.now(), kind, name, offline }, ...history()].slice(0, HISTORY_MAX));
   settings = defineSettings();
 }
@@ -216,6 +267,12 @@ function savedName(key: keyof Snapshot, id: string): string | undefined {
   return me ? previous.get(me)?.[key]?.[id] : undefined;
 }
 
+/** The picture for a report, from the cache or else the last session's snapshot. */
+function pictureOf(kind: Kind, id: string): string | undefined {
+  const key = pictureKey(kind, id);
+  return pictures.get(key) ?? (me ? previous.get(me)?.pictures?.[key] : undefined);
+}
+
 function on(event: string, listener: (payload: Record<string, unknown>) => void): void {
   // Event names only: `onSend` never comes through here.
   const sig = phoenix.gateway[event] as Phoenix.Sig<unknown> | undefined;
@@ -223,8 +280,12 @@ function on(event: string, listener: (payload: Record<string, unknown>) => void)
 }
 
 on('relationshipAdd', (p) => {
-  const id = plain(p.id ?? (p.user as { id?: unknown } | undefined)?.id);
-  if (id) people.set(id, { type: Number(p.type), name: personName(p.user as never, id) });
+  const user = p.user as { id?: unknown; avatar?: unknown } | undefined;
+  const id = plain(p.id ?? user?.id);
+  if (id) {
+    people.set(id, { type: Number(p.type), name: personName(user as never, id) });
+    setPicture(pictureKey('friend', id), avatar(id, user?.avatar));
+  }
   saveSnapshot();
 });
 
@@ -244,14 +305,18 @@ on('relationshipRemove', (p) => {
   if (isSelf('user', id)) return;
   const type = Number(p.type ?? known?.type);
   const name = known?.name ?? savedName('friends', id) ?? `user ${id}`;
-  if (type === FRIEND) report('friend', name);
-  else if (type === INCOMING_REQUEST) report('request', name);
+  if (type === FRIEND) report('friend', name, false, pictureOf('friend', id));
+  else if (type === INCOMING_REQUEST) report('request', name, false, pictureOf('request', id));
 });
 
 on('guildCreate', (p) => {
   const id = plain(p.id);
-  const name = (p.properties as { name?: unknown } | undefined)?.name ?? p.name;
-  if (id) servers.set(id, typeof name === 'string' ? name : servers.get(id) ?? `server ${id}`);
+  const props = p.properties as { name?: unknown; icon?: unknown } | undefined;
+  const name = props?.name ?? p.name;
+  if (id) {
+    servers.set(id, typeof name === 'string' ? name : servers.get(id) ?? `server ${id}`);
+    setPicture(pictureKey('server', id), icon('icons', id, props?.icon ?? p.icon));
+  }
   saveSnapshot();
 });
 
@@ -262,7 +327,7 @@ on('guildDelete', (p) => {
   const name = servers.get(id) ?? savedName('servers', id) ?? `server ${id}`;
   servers.delete(id);
   saveSnapshot();
-  if (!isSelf('server', id)) report('server', name);
+  if (!isSelf('server', id)) report('server', name, false, pictureOf('server', id));
 });
 
 on('channelRecipientRemove', (p) => {
@@ -272,7 +337,7 @@ on('channelRecipientRemove', (p) => {
   const name = groups.get(id) ?? savedName('groups', id) ?? 'a group';
   groups.delete(id);
   saveSnapshot();
-  if (!isSelf('group', id)) report('group', name);
+  if (!isSelf('group', id)) report('group', name, false, pictureOf('group', id));
 });
 
 on('channelDelete', (p) => {
@@ -311,10 +376,11 @@ async function current(kind: Exclude<Kind, 'request'>): Promise<Set<string> | nu
 }
 
 /** Puts back an entry the cache had not loaded yet, so it stays in the snapshot. */
-function restore(kind: Kind, id: string, name: string): void {
+function restore(kind: Kind, id: string, name: string, picture: string | undefined): void {
   if (kind === 'friend') people.set(id, { type: FRIEND, name });
   else if (kind === 'server') servers.set(id, name);
   else if (kind === 'group') groups.set(id, name);
+  if (!pictures.has(pictureKey(kind, id))) setPicture(pictureKey(kind, id), picture);
 }
 
 async function checkOffline(previous: Snapshot): Promise<void> {
@@ -325,19 +391,20 @@ async function checkOffline(previous: Snapshot): Promise<void> {
     ['group', previous.groups ?? {}, now.groups],
   ];
   for (const [kind, before, after] of lists) {
+    const picture = (id: string) => previous.pictures?.[pictureKey(kind, id)];
     const gone = Object.keys(before).filter((id) => !(id in after));
     if (!gone.length) continue;
     // A list that lost most of its entries is a cache that is not loaded yet, not real removals.
     const total = Object.keys(before).length;
     if (Object.keys(after).length === 0 || gone.length > Math.max(3, total / 2)) {
-      for (const id of gone) restore(kind, id, before[id]);
+      for (const id of gone) restore(kind, id, before[id], picture(id));
       continue;
     }
     // Phoenix can still be filling its cache in: only what Discord confirms is gone is reported.
     const still = await current(kind);
     for (const id of gone) {
-      if (!still || still.has(id)) restore(kind, id, before[id]);
-      else report(kind, before[id], true);
+      if (!still || still.has(id)) restore(kind, id, before[id], picture(id));
+      else report(kind, before[id], true, picture(id));
     }
   }
 }
