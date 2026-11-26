@@ -5,7 +5,8 @@ A build of Sunbird, the plugin runtime for Discord Phoenix, with the fixes
 the Windows build 2208 needs:
 - message notifications work again (sound and Windows notification)
 - buttons, text fields and dialogs from plugins are clickable
-- plugins can add their own tabs in Settings, and show banners in Discord
+- plugins can add their own tabs in Settings, and show banners in Discord,
+  with a picture like an avatar or a server icon
 
 How to use
 1. Quit Discord: right click its icon in the taskbar tray, then Quit.
