@@ -1,11 +1,14 @@
 // @description Browse and install reviewed community plugins from Ultracord
-// @version 0.1.0
+// @version 0.2.0
 // @author Ultracord
 
 const CATALOG = 'https://assets.ultracord.dev/plugins/';
 const INDEX = `${CATALOG}index.json`;
-const NAME = /^ultra-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STALE_MS = 10 * 60 * 1000;
+const CONFIRM_MS = 15 * 1000;
+// Sunbird calls its install entry "Install from URL" on mobile and "+ URL" on desktop.
+const PASTE_HINT = "Paste it in Sunbird's settings with Install from URL (+ URL on desktop).";
 
 interface Listing {
   name: string;
@@ -25,32 +28,25 @@ const installer = (phoenix as unknown as { plugins?: Partial<PluginsApi> }).plug
 const install = typeof installer?.install === 'function' ? installer.install.bind(installer) : null;
 
 const ACCESS: Record<string, string> = {
-  network: 'Connects to the internet',
-  'discord-api': 'Calls the Discord API with your session',
-  'intercepts-discord-api': 'Reads or changes Discord API requests',
-  'edits-outgoing-messages': 'Can change the messages you send',
-  'reads-local-cache': "Reads Discord's local cache, including your messages",
-  'native-bridge': 'Calls native app functions',
+  network: 'the internet',
+  'discord-api': 'the Discord API with your session',
+  'intercepts-discord-api': 'changes Discord API requests',
+  'edits-outgoing-messages': 'changes the messages you send',
+  'reads-local-cache': 'reads your local message cache',
+  'native-bridge': 'native app functions',
 };
 
-const settings = phoenix.settings.define({
-  open: { type: 'button', title: 'Open Ultracord', onPress: () => void open() },
-  notify: {
-    type: 'switch',
-    title: 'Update notifications',
-    description: 'Check for plugin updates when Discord starts',
-    default: true,
-  },
-});
-
 let catalog = phoenix.storage.get<Listing[]>('catalog') ?? [];
+let lastLoadFailed = false;
+let loading = false;
 let page: Phoenix.PageHandle | null = null;
+let armed: { name: string; at: number } | null = null;
 
 function isListing(value: unknown): value is Listing {
   const v = value as Partial<Listing> | null;
   return (
     typeof v === 'object' && v !== null &&
-    typeof v.name === 'string' && NAME.test(v.name) &&
+    typeof v.name === 'string' && NAME.test(v.name) && v.name !== 'ultracord' &&
     typeof v.description === 'string' &&
     typeof v.version === 'string' &&
     typeof v.author === 'string' &&
@@ -82,9 +78,11 @@ async function refresh(): Promise<boolean> {
     catalog = list.filter(isListing);
     phoenix.storage.set('catalog', catalog);
     phoenix.storage.set('fetchedAt', Date.now());
+    lastLoadFailed = false;
     return true;
   } catch (err) {
     phoenix.log.warn(`could not load the catalog: ${err}`);
+    lastLoadFailed = true;
     return false;
   }
 }
@@ -94,56 +92,111 @@ function updates(): Listing[] {
   return catalog.filter((p) => mine[p.name] && compare(p.version, mine[p.name]) > 0);
 }
 
-function describe(p: Listing, had: string | undefined): string {
-  const lines = [p.description, `by ${p.author}`];
-  if (had) lines.push(compare(p.version, had) > 0 ? `Update available (you have ${had})` : `You picked ${had}`);
-  if (p.access.length) {
-    lines.push('');
-    for (const key of p.access) lines.push(`• ${ACCESS[key] ?? key}`);
-  }
-  if (p.domains.length) lines.push(`• Contacts: ${p.domains.join(', ')}`);
-  if (p.warning) lines.push('', `Warning: ${p.warning}`);
-  return lines.join('\n');
+/** Plugins with an update first, then by name. */
+function ordered(): Listing[] {
+  const pending = new Set(updates().map((p) => p.name));
+  return [...catalog].sort((a, b) =>
+    Number(pending.has(b.name)) - Number(pending.has(a.name)) || a.name.localeCompare(b.name));
 }
 
-function sections(): Phoenix.PageSection[] {
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function accessLine(p: Listing): string {
+  const parts = p.access.map((key) => ACCESS[key] ?? key);
+  if (p.domains.length) parts.push(`contacts ${p.domains.join(', ')}`);
+  return parts.length ? `Uses ${parts.join(', ')}.` : 'No special access.';
+}
+
+function pickedLine(p: Listing, had: string | undefined): string {
+  if (!had) return '';
+  return compare(p.version, had) > 0 ? ` Update available, you have ${had}.` : ` You picked ${had}.`;
+}
+
+function actionLabel(p: Listing, had: string | undefined): string {
+  const outdated = had !== undefined && compare(p.version, had) > 0;
+  if (install) return outdated ? 'Update' : had ? 'Reinstall' : 'Install';
+  return outdated ? 'Copy update link' : 'Copy install link';
+}
+
+function describe(p: Listing, had: string | undefined): string {
+  const warning = p.warning ? ` Warning: ${sentence(p.warning)}` : '';
+  return `${sentence(p.description)} By ${p.author}. ${accessLine(p)}${warning}${pickedLine(p, had)}`;
+}
+
+function status(): string {
+  const fetchedAt = phoenix.storage.get<number>('fetchedAt');
+  if (loading) return 'Getting the plugin list…';
+  if (lastLoadFailed) {
+    return fetchedAt ? 'Could not reach Ultracord. Showing the last saved list.' : 'Could not reach Ultracord. Check your connection.';
+  }
+  if (!fetchedAt) return 'Not loaded yet.';
+  const at = new Date(fetchedAt);
+  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+  const count = catalog.length;
+  return count
+    ? `${count} ${count === 1 ? 'plugin' : 'plugins'}, updated at ${time}.`
+    : `No plugins yet, the first ones are being reviewed. Updated at ${time}.`;
+}
+
+/**
+ * The store as rows on the plugin's own settings page. Settings work on every platform, while
+ * pages need native modals that Sunbird turns off on some desktop builds.
+ */
+function defineSettings() {
   const mine = picked();
-  const list: Phoenix.PageSection[] = [
-    {
-      type: 'text',
-      text: install
-        ? 'Community plugins, reviewed line by line before they are listed.'
-        : 'Community plugins, reviewed line by line before they are listed. ' +
-          'Pick one to copy its link, then paste it in Settings > Phoenix > Install from URL.',
+  const schema: Record<string, Phoenix.SettingSpec> = {
+    refresh: {
+      type: 'button',
+      title: 'Refresh the plugin list',
+      description: status(),
+      onPress: () => void refreshSettings(),
     },
-    { type: 'buttons', buttons: [{ label: 'Refresh', onPress: () => void reload() }] },
-  ];
-
-  if (!catalog.length) {
-    list.push({ type: 'text', title: 'Nothing to show', text: 'The catalog could not be loaded. Check your connection and refresh.' });
-  }
-
-  // Plugins with an update first, then by name.
-  const pending = new Set(updates().map((p) => p.name));
-  const order = [...catalog].sort((a, b) =>
-    Number(pending.has(b.name)) - Number(pending.has(a.name)) || a.name.localeCompare(b.name));
-
-  for (const p of order) {
+  };
+  for (const p of ordered()) {
     const had = mine[p.name];
-    const label = install ? (had ? 'Update' : 'Install') : 'Copy install link';
-    list.push({ type: 'text', title: `${p.name}  ${p.version}`, text: describe(p, had) });
-    list.push({ type: 'buttons', buttons: [{ label, onPress: () => void pick(p) }] });
+    schema[`plugin-${p.name}`] = {
+      type: 'button',
+      title: `${actionLabel(p, had)}: ${p.name} ${p.version}`,
+      description: describe(p, had),
+      onPress: () => void pick(p),
+    };
   }
-  return list;
+  schema.notify = {
+    type: 'switch',
+    title: 'Update notifications',
+    description: 'Check for plugin updates when Discord starts',
+    default: true,
+  };
+  return phoenix.settings.define(schema);
+}
+
+let settings = defineSettings();
+
+async function refreshSettings(): Promise<void> {
+  loading = true;
+  settings = defineSettings();
+  const ok = await refresh();
+  loading = false;
+  settings = defineSettings();
+  phoenix.ui.toast(ok ? `Ultracord: ${status()}` : 'Could not reach Ultracord.');
 }
 
 async function pick(p: Listing): Promise<void> {
-  if (p.warning) {
-    const choice = await phoenix.ui.choose({ title: p.name, message: p.warning, options: ['Continue', 'Cancel'] });
-    if (choice !== 0) return;
+  // A warning needs a second press: confirmation dialogs are not available everywhere.
+  if (p.warning && !(armed?.name === p.name && Date.now() - armed.at < CONFIRM_MS)) {
+    armed = { name: p.name, at: Date.now() };
+    phoenix.ui.toast(`${p.name}: ${sentence(p.warning)} Press again to continue.`);
+    return;
   }
+  armed = null;
+
   const url = `${CATALOG}${p.name}.js`;
-  const mark = () => phoenix.storage.set('picked', { ...picked(), [p.name]: p.version });
+  const mark = () => {
+    phoenix.storage.set('picked', { ...picked(), [p.name]: p.version });
+    settings = defineSettings();
+  };
 
   if (install) {
     try {
@@ -156,30 +209,61 @@ async function pick(p: Listing): Promise<void> {
   } else {
     phoenix.ui.copy(url);
     mark();
-    phoenix.ui.toast('Link copied. Paste it in Settings > Phoenix > Install from URL.');
+    phoenix.ui.toast(`Link copied. ${PASTE_HINT}`);
   }
 }
 
-function show(): void {
-  page?.close();
-  page = phoenix.ui.openPage({ title: 'Ultracord', sections: sections() });
+/* Full-screen page, opened from the chat header button on mobile. */
+
+function sections(): Phoenix.PageSection[] {
+  const mine = picked();
+  const list: Phoenix.PageSection[] = [
+    { type: 'text', text: `Community plugins, reviewed line by line before they are listed. ${status()}` },
+    { type: 'buttons', buttons: [{ label: 'Refresh', onPress: () => void reload() }] },
+  ];
+  for (const p of ordered()) {
+    const had = mine[p.name];
+    list.push({ type: 'text', title: `${p.name}  ${p.version}`, text: describe(p, had) });
+    list.push({ type: 'buttons', buttons: [{ label: actionLabel(p, had), onPress: () => void pick(p) }] });
+  }
+  return list;
 }
 
-async function open(): Promise<void> {
+function show(): void {
+  // Open the new page before closing the old one, so a refresh replaces it in place.
+  const previous = page;
+  page = phoenix.ui.openPage({ title: 'Ultracord', sections: sections() });
+  previous?.close();
+}
+
+function open(): void {
+  // Open before any await: a page opened long after the press can end up behind other UI.
   const fetchedAt = phoenix.storage.get<number>('fetchedAt') ?? 0;
-  if (Date.now() - fetchedAt > STALE_MS) await refresh();
+  const stale = Date.now() - fetchedAt > STALE_MS;
+  loading = stale && !catalog.length;
   show();
+  if (!stale) return;
+
+  const before = JSON.stringify(catalog);
+  void refresh().then(() => {
+    const wasLoading = loading;
+    loading = false;
+    settings = defineSettings();
+    if (wasLoading || JSON.stringify(catalog) !== before) show();
+  });
 }
 
 async function reload(): Promise<void> {
   if (!(await refresh())) phoenix.ui.toast('Could not reach Ultracord. Showing the last saved list.');
+  settings = defineSettings();
   show();
 }
 
+// Mobile only: desktop has no header slots, so there the store lives on the settings page.
 const removeButton = phoenix.ui.addHeaderButton({
   icon: 'res://ic_mana_puzzle_piece_plus',
   label: 'Ultracord',
-  onPress: () => void open(),
+  onPress: () => open(),
 });
 
 phoenix.onUnload(() => {
@@ -187,15 +271,15 @@ phoenix.onUnload(() => {
   page?.close();
 });
 
-if (settings.notify) {
-  void refresh().then((ok) => {
-    const count = ok ? updates().length : 0;
-    if (count) {
-      phoenix.ui.notify({
-        title: 'Ultracord',
-        body: count === 1 ? '1 plugin update is available' : `${count} plugin updates are available`,
-        onPress: () => void open(),
-      });
-    }
-  });
-}
+void refresh().then((ok) => {
+  settings = defineSettings();
+  const count = ok && settings.notify !== false ? updates().length : 0;
+  if (count) {
+    phoenix.ui.notify({
+      title: 'Ultracord',
+      // Desktop ignores onPress, so the text says where to go.
+      body: `${count === 1 ? '1 plugin update is' : `${count} plugin updates are`} available. See Ultracord in Sunbird's settings.`,
+      onPress: () => open(),
+    });
+  }
+});

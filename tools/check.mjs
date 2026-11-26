@@ -2,9 +2,10 @@
 // reach. In GitHub Actions the report also lands in the job summary, so a reviewer sees it on the PR.
 // These checks are a first filter: a human still reads every line before a merge.
 import { appendFile } from 'node:fs/promises';
-import { inspect, listPlugins } from './plugins.mjs';
+import { inspect, listPlugins, takenNames } from './plugins.mjs';
 
-const results = await Promise.all((await listPlugins()).map(inspect));
+const taken = await takenNames();
+const results = await Promise.all((await listPlugins()).map((name) => inspect(name, taken)));
 let failed = false;
 const rows = [];
 

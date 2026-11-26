@@ -7,9 +7,29 @@ import { fileURLToPath } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 export const pluginsDir = join(root, 'plugins');
 
-// `ultracord` is the store itself. Every other plugin is prefixed so it can never replace one of
-// Sunbird's bundled plugins, since Sunbird installs a bundle under its file name.
-export const NAME = /^(?:ultracord|ultra-[a-z0-9]+(?:-[a-z0-9]+)*)$/;
+export const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+// Sunbird installs a bundle under its file name, so a plugin named like one of Sunbird's own
+// would replace it. Names are checked against Sunbird's live list, or this copy when offline.
+const SUNBIRD_LIST = 'https://assets.sunbird.tools/plugins/index.json';
+const SUNBIRD_FALLBACK = [
+  'clear-urls', 'dearrow', 'example', 'fakenitro', 'fix-embeds', 'global-badges',
+  'hide-composer-buttons', 'message-latency', 'message-logger', 'no-profile-themes',
+  'no-reply-mention', 'reviewdb', 'silent-typing', 'spoiler-mode', 'taptap', 'text-replace',
+  'translate', 'view-raw',
+];
+
+/** Names Ultracord plugins cannot use. */
+export async function takenNames() {
+  const names = new Set(SUNBIRD_FALLBACK);
+  try {
+    const res = await fetch(SUNBIRD_LIST);
+    if (res.ok) for (const plugin of await res.json()) if (typeof plugin?.name === 'string') names.add(plugin.name);
+  } catch {
+    console.warn(`could not read ${SUNBIRD_LIST}, using the built-in list of Sunbird plugins`);
+  }
+  return names;
+}
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const REQUIRED = ['description', 'version', 'author'];
 
@@ -85,13 +105,14 @@ function accessIn(code) {
 }
 
 /** Reads and scans one plugin. `errors` block the merge, the rest guides the review. */
-export async function inspect(name) {
+export async function inspect(name, taken = new Set()) {
   const dir = join(pluginsDir, name);
   const entry = await readFile(join(dir, 'src', 'index.ts'), 'utf8');
   const { banner, fields } = parseHeader(entry);
   const errors = [];
 
-  if (!NAME.test(name)) errors.push(`folder name must be "ultra-<name>" in lowercase (got "${name}")`);
+  if (!NAME.test(name)) errors.push(`folder name must be lowercase words joined by dashes (got "${name}")`);
+  if (taken.has(name)) errors.push(`"${name}" is the name of a Sunbird plugin, which this one would replace`);
   for (const key of REQUIRED) if (!fields[key]) errors.push(`missing "// @${key}" header line`);
   if (fields.version && !SEMVER.test(fields.version)) errors.push(`@version must look like 1.2.3 (got "${fields.version}")`);
 

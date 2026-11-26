@@ -9,7 +9,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
 import { build } from 'esbuild';
-import { forbiddenIn, inspect, listPlugins, pluginsDir, root } from './plugins.mjs';
+import { forbiddenIn, inspect, listPlugins, pluginsDir, root, takenNames } from './plugins.mjs';
 
 const ASSETS = 'https://assets.ultracord.dev/';
 const dist = join(root, 'dist');
@@ -18,11 +18,12 @@ const out = join(dist, 'plugins');
 await rm(dist, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 
+const taken = await takenNames();
 const index = [];
 const crcs = {};
 
 for (const name of await listPlugins()) {
-  const plugin = await inspect(name);
+  const plugin = await inspect(name, taken);
   if (plugin.errors.length) {
     console.error(`${name}: run "npm run check" first\n  ${plugin.errors.join('\n  ')}`);
     process.exit(1);

@@ -14,11 +14,13 @@ before they are listed, and installable from inside Discord.
 ## Install
 
 1. Get Sunbird from [sunbird.tools](https://sunbird.tools/) with the plugin runtime turned on.
-2. In Discord, open **Settings → Phoenix**, choose **Install from URL** and paste:
+2. In Discord's settings, open **Phoenix** (**Sunbird** on desktop), choose **Install from URL**
+   (**+ URL** on desktop) and paste:
    ```
    https://assets.ultracord.dev/plugins/ultracord.js
    ```
-3. Open Ultracord from the button in the chat header and pick the plugins you want.
+3. Open Ultracord from the button in the chat header, or from its settings page on desktop, and
+   pick the plugins you want.
 
 Every plugin's code is in [`plugins/`](plugins). The files you install are built from it by
 [GitHub Actions](.github/workflows/deploy.yml) and are not minified, so you can check them.

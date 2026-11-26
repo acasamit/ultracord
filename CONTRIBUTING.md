@@ -18,8 +18,10 @@ npm run all        # types, checks, typecheck and build
 
 ## Add a plugin
 
-Create `plugins/ultra-<name>/src/index.ts`. The `ultra-` prefix is required: Sunbird installs a
-plugin under its file name, so a plugin called `translate` would replace Sunbird's own.
+Create `plugins/<name>/src/index.ts`, with a name in lowercase words joined by dashes, like
+`read-all`. It cannot be the name of one of Sunbird's own plugins: Sunbird installs a plugin under
+its file name, so a plugin called `translate` would replace Sunbird's. `npm run check` refuses
+those names.
 
 The file starts with its header:
 
@@ -38,8 +40,8 @@ Optional header lines: `// @warning <text>` (shown before install) and `// @enab
 
 ## Test it
 
-`npm run build` writes `dist/plugins/ultra-<name>.js`. Install that file in Discord with
-**Settings → Phoenix → Install from file**. Sunbird's debug shell can also hot reload a plugin
+`npm run build` writes `dist/plugins/<name>.js`. Install that file in Discord with
+**Install from file** in Sunbird's settings (**+ File** on desktop). Sunbird's debug shell can also hot reload a plugin
 while you work on it (see Sunbird's `AGENTS.md`, "Fast loop").
 
 ## Rules

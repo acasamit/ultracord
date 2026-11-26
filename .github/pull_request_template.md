@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] The folder is `plugins/ultra-<name>/` and the header has `@description`, `@version` and `@author`
+- [ ] The folder is `plugins/<name>/` and the header has `@description`, `@version` and `@author`
 - [ ] I tested it on Sunbird (Android, iOS or desktop) and say which below
 - [ ] It does not load or run remote code, and does not collect user data
 - [ ] Every domain it contacts is listed and explained below
