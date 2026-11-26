@@ -1,0 +1,26 @@
+name: Check
+
+# Runs on pull requests from forks too. It uses `pull_request` (not `pull_request_target`), so the
+# PR's code never runs with write access or secrets.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run types
+      - run: npm run check
+      - run: npm run typecheck
+      - run: npm run build

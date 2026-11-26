@@ -1,0 +1,21 @@
+{
+  "name": "ultracord",
+  "private": true,
+  "description": "Community plugins and themes for Sunbird",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22.2"
+  },
+  "scripts": {
+    "types": "node tools/fetch-types.mjs",
+    "check": "node tools/check.mjs",
+    "typecheck": "tsc -p plugins",
+    "build": "node tools/bundle.mjs",
+    "all": "npm run types && npm run check && npm run typecheck && npm run build"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
