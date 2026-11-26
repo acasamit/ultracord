@@ -1,0 +1,92 @@
+name: Sunbird 2208
+
+# Builds the `ultracord` branch of acasamit/sunbird (Sunbird with the fixes Discord Phoenix build
+# 2208 needs, see tools/sunbird-fork.mjs) and publishes it as Ultracord-2208.zip on a release.
+# Run it by hand after pushing a new `ultracord`. A rerun on the same commit replaces the zip.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/sunbird-2208.yml
+      - tools/sunbird-2208/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sunbird-2208
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Same toolchain as Sunbird's own Windows release.
+    runs-on: windows-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: acasamit/sunbird
+          ref: ultracord
+          path: sunbird
+          persist-credentials: false
+      - id: source
+        working-directory: sunbird
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - run: rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+      - working-directory: sunbird
+        run: cargo +stable-x86_64-pc-windows-gnu build --locked --release -p phoenix-loader -p phoenix-inject
+      - name: Package
+        shell: pwsh
+        env:
+          SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          $out = New-Item -ItemType Directory Ultracord-2208
+          Copy-Item sunbird/target/release/phoenix.dll, sunbird/target/release/phoenix-inject.exe $out
+          # The licence travels with every copy (EUPL-1.2 article 5), verbatim from SPDX.
+          Invoke-WebRequest https://raw.githubusercontent.com/spdx/license-list-data/main/text/EUPL-1.2.txt `
+            -OutFile (Join-Path $out LICENSE-EUPL-1.2.txt)
+          # CRLF line ends, for cmd and Notepad.
+          foreach ($name in 'Launch Discord.bat', 'README.txt') {
+            $text = (Get-Content -Raw "tools/sunbird-2208/$name") -replace '\r?\n', "`r`n"
+            [IO.File]::WriteAllText((Join-Path $out $name), $text.Replace('{{SHA}}', $env:SHA))
+          }
+          Compress-Archive -Path Ultracord-2208 -DestinationPath Ultracord-2208.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ultracord-2208
+          path: Ultracord-2208.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Ultracord-2208
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          tag="sunbird-2208-${SHA::7}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" Ultracord-2208.zip --clobber
+            exit 0
+          fi
+          notes="Sunbird for Discord Phoenix build 2208 on Windows, with working message notifications, clickable plugin buttons and text fields, plugin settings tabs and in-app banners.
+
+          Download **Ultracord-2208.zip**, extract it, quit Discord, then double click \`Launch Discord.bat\`. The README inside has the details.
+
+          Modified version of [Sunbird](https://github.com/sunbird-tools/sunbird), under the EUPL-1.2. Source: [acasamit/sunbird@${SHA::7}](https://github.com/acasamit/sunbird/tree/$SHA)."
+          gh release create "$tag" Ultracord-2208.zip --latest \
+            --title "Ultracord for Discord 2208 (${SHA::7})" --notes "$notes"
