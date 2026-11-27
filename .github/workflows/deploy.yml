@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write: theme files go to the `themes` release too.
+  contents: write
   pages: write
   id-token: write
 
@@ -29,6 +30,27 @@ jobs:
           node-version: 24
       - run: npm ci
       - run: npm run all
+      # The site's Download buttons point at the `themes` release, which counts downloads. Each
+      # version is an asset of its own and is never replaced, so counts add up across versions and
+      # old links keep working. Before Pages, so the catalog never links to a missing file.
+      - name: Publish theme files to the themes release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view themes > /dev/null 2>&1; then
+            gh release create themes --latest=false --title "Themes" \
+              --notes "Every theme file the store has published, one per version. The Download buttons on ultracord.dev point here."
+          fi
+          existing=$(gh release view themes --json assets --jq '.assets[].name')
+          mkdir -p release
+          for row in $(jq -r '.[] | "\(.name)@\(.version)"' dist/themes/index.json); do
+            name=${row%@*}
+            file="$name-${row#*@}.theme.css"
+            if ! grep -qxF "$file" <<< "$existing"; then
+              cp "dist/themes/$name.theme.css" "release/$file"
+              gh release upload themes "release/$file"
+            fi
+          done
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

@@ -13,6 +13,8 @@ import { forbiddenIn, inspect, listPlugins, pluginsDir, root, takenNames } from 
 import { inspectTheme, listThemes } from './themes.mjs';
 
 const ASSETS = 'https://assets.ultracord.dev/';
+// The deploy workflow uploads each theme version here, where GitHub counts the downloads.
+const RELEASE = 'https://github.com/acasamit/ultracord/releases/download/themes/';
 const dist = join(root, 'dist');
 const out = join(dist, 'plugins');
 
@@ -89,6 +91,7 @@ for (const name of await listThemes()) {
     author,
     ...(source ? { source, license } : {}),
     url: `${ASSETS}themes/${theme.file}`,
+    download: `${RELEASE}${name}-${version}.theme.css`,
     colors: theme.colors,
     ...('radius-scale' in theme.values ? { radiusScale: Number(theme.values['radius-scale']) } : {}),
     size: bytes.length,

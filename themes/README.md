@@ -57,6 +57,9 @@ the theme's card. Only port a palette whose license allows it, such as MIT.
  * @license MIT, Copyright (c) 2016 Dracula Theme
 ```
 
+Raise `@version` whenever the file changes: the site's Download buttons serve each version from
+a GitHub release, which keeps one file per version and counts its downloads.
+
 `npm run check` refuses a theme that sets anything else, or whose text is hard to read on its
 backgrounds (under 4.5:1 for text, 3:1 for secondary text). To try one, put the file in Sunbird's
 themes folder (Sunbird's `desktop-themes` plugin has a button that opens it) and pick it there.
