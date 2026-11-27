@@ -11,7 +11,7 @@ import { root } from './plugins.mjs';
 
 const OWNER = 'acasamit';
 const REPO = 'ultracord';
-const CATEGORY = 'theme-comments';
+const CATEGORY = 'Theme comments';
 const ASSET = /^([a-z0-9]+(?:-[a-z0-9]+)*)-\d+\.\d+\.\d+\.theme\.css$/;
 
 const token = process.env.GITHUB_TOKEN;
@@ -47,10 +47,11 @@ async function graphql(query, variables) {
 
 async function discussions() {
   if (!token) throw new Error('no GITHUB_TOKEN');
+  // Found by its name, which is what giscus is given.
   const category = (await graphql(
-    'query($owner: String!, $repo: String!, $slug: String!) { repository(owner: $owner, name: $repo) { discussionCategory(slug: $slug) { id } } }',
-    { owner: OWNER, repo: REPO, slug: CATEGORY },
-  )).discussionCategory;
+    'query($owner: String!, $repo: String!) { repository(owner: $owner, name: $repo) { discussionCategories(first: 50) { nodes { id name } } } }',
+    { owner: OWNER, repo: REPO },
+  )).discussionCategories.nodes.find((c) => c.name.trim().toLowerCase() === CATEGORY.toLowerCase());
   if (!category) throw new Error(`no "${CATEGORY}" discussion category`);
   for (const name of names) Object.assign(themes[name], { comments: 0, reactions: 0 });
 
