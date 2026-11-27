@@ -1,14 +1,22 @@
 name: Deploy
 
-# Publishes dist/ to GitHub Pages (assets.ultracord.dev) on every push to main.
+# Publishes dist/ to GitHub Pages (assets.ultracord.dev) on every push to main. It also runs every
+# hour and when a theme thread gets a comment, so the site's download, comment and reaction counts
+# (themes/stats.json) stay fresh.
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "23 * * * *"
+  discussion_comment:
+    types: [created, deleted]
   workflow_dispatch:
 
 permissions:
   # write: theme files go to the `themes` release too.
   contents: write
+  # read: comment and reaction counts of the theme threads.
+  discussions: read
   pages: write
   id-token: write
 
@@ -51,6 +59,10 @@ jobs:
               gh release upload themes "release/$file"
             fi
           done
+      - name: Count downloads, comments and reactions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tools/stats.mjs
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
