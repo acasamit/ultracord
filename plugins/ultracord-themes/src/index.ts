@@ -1,5 +1,5 @@
 // @description Every Ultracord theme in Discord's settings, applied in one press and kept up to date
-// @version 1.0.0
+// @version 1.0.1
 // @author Ultracord
 // @fetch assets.ultracord.dev
 
@@ -125,13 +125,11 @@ if (!themes?.supported()) {
       theme: {
         type: 'select',
         title: 'Theme',
-        description: "Recolors Discord. Sunbird's desktop-themes plugin applies themes too: the last one picked wins.",
+        description: 'Recolors Discord. If desktop-themes applies one too, the last picked wins.',
+        // Short labels: Sunbird draws the picked one next to the title, and a long one squeezes it.
         options: [
-          { value: 'off', label: "Off, Discord's colors" },
-          ...listings().map((t) => ({
-            value: t.name,
-            label: `${t.title}, ${t.source ? 'ported' : 'made'} by ${t.author}. ${t.description}`,
-          })),
+          { value: 'off', label: 'Off' },
+          ...listings().map((t) => ({ value: t.name, label: `${t.title} by ${t.author}` })),
         ],
         default: 'off',
         onChange: (value) => pick(value),
