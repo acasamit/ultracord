@@ -6,7 +6,9 @@ the colors change everywhere. Pictures, fonts and the layout stay as they are.
 
 ## Writing one
 
-Create `themes/<name>/<name>.theme.css`, with a name in lowercase words joined by dashes:
+The easiest way is the [theme maker](https://ultracord.dev/create.html): pick the colors with a
+live preview, and it proposes the file for you. By hand, create `themes/<name>/<name>.theme.css`,
+with a name in lowercase words joined by dashes:
 
 ```css
 /**
