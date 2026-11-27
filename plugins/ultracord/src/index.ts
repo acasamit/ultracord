@@ -1,9 +1,11 @@
-// @description Browse and install reviewed community plugins from Ultracord
-// @version 0.2.0
+// @description Browse and install reviewed community plugins and themes from Ultracord
+// @version 0.3.0
 // @author Ultracord
 
 const CATALOG = 'https://assets.ultracord.dev/plugins/';
 const INDEX = `${CATALOG}index.json`;
+const THEMES = 'https://assets.ultracord.dev/themes/';
+const THEME_INDEX = `${THEMES}index.json`;
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STALE_MS = 10 * 60 * 1000;
 const CONFIRM_MS = 15 * 1000;
@@ -18,6 +20,21 @@ interface Listing {
   warning?: string;
   access: string[];
   domains: string[];
+}
+
+interface ThemeListing {
+  name: string;
+  title: string;
+  description: string;
+  version: string;
+  author: string;
+}
+
+/** The stylesheet in use, kept so it applies at once on the next start. */
+interface AppliedTheme {
+  name: string;
+  version: string;
+  css: string;
 }
 
 // Proposed upstream as `phoenix.plugins`. Until Sunbird ships it, the store copies the install link.
@@ -37,6 +54,9 @@ const ACCESS: Record<string, string> = {
 };
 
 let catalog = phoenix.storage.get<Listing[]>('catalog') ?? [];
+let themeCatalog = phoenix.storage.get<ThemeListing[]>('themes') ?? [];
+/** Sunbird themes Discord on Windows desktop only. Elsewhere the theme picker stays hidden. */
+const themes = phoenix.themes?.supported() ? phoenix.themes : null;
 let lastLoadFailed = false;
 let loading = false;
 let page: Phoenix.PageHandle | null = null;
@@ -51,6 +71,18 @@ function isListing(value: unknown): value is Listing {
     typeof v.version === 'string' &&
     typeof v.author === 'string' &&
     Array.isArray(v.access) && Array.isArray(v.domains)
+  );
+}
+
+function isThemeListing(value: unknown): value is ThemeListing {
+  const v = value as Partial<ThemeListing> | null;
+  return (
+    typeof v === 'object' && v !== null &&
+    typeof v.name === 'string' && NAME.test(v.name) &&
+    typeof v.title === 'string' &&
+    typeof v.description === 'string' &&
+    typeof v.version === 'string' &&
+    typeof v.author === 'string'
   );
 }
 
@@ -84,6 +116,42 @@ async function refresh(): Promise<boolean> {
     phoenix.log.warn(`could not load the catalog: ${err}`);
     lastLoadFailed = true;
     return false;
+  }
+}
+
+async function refreshThemes(): Promise<void> {
+  if (!themes) return;
+  try {
+    const res = await phoenix.fetch(THEME_INDEX);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const list = res.json<unknown>();
+    if (!Array.isArray(list)) throw new Error('unexpected theme list format');
+    themeCatalog = list.filter(isThemeListing);
+    phoenix.storage.set('themes', themeCatalog);
+  } catch (err) {
+    phoenix.log.warn(`could not load the themes: ${err}`);
+  }
+}
+
+/** Downloads and applies theme `name`, or brings back Discord's colors with "off". */
+async function useTheme(name: string, quiet = false): Promise<void> {
+  if (!themes) return;
+  if (name === 'off') {
+    themes.clear();
+    phoenix.storage.delete('appliedTheme');
+    return;
+  }
+  const listing = themeCatalog.find((t) => t.name === name);
+  if (!listing) return;
+  try {
+    const res = await phoenix.fetch(`${THEMES}${listing.name}.theme.css`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const css = res.text();
+    if (!themes.setCss(css)) throw new Error('it sets nothing Sunbird can draw');
+    phoenix.storage.set('appliedTheme', { name, version: listing.version, css } satisfies AppliedTheme);
+    if (!quiet) phoenix.ui.toast(`Theme: ${listing.title}`);
+  } catch (err) {
+    phoenix.ui.toast(`Could not apply ${listing.title}: ${err}`);
   }
 }
 
@@ -154,6 +222,20 @@ function defineSettings() {
       onPress: () => void refreshSettings(),
     },
   };
+  if (themes) {
+    schema.theme = {
+      type: 'select',
+      title: 'Theme',
+      description:
+        "Recolors Discord. Sunbird's desktop-themes plugin applies themes too: the last one picked wins.",
+      options: [
+        { value: 'off', label: "Off, Discord's colors" },
+        ...themeCatalog.map((t) => ({ value: t.name, label: `${t.title}, by ${t.author}. ${sentence(t.description)}` })),
+      ],
+      default: 'off',
+      onChange: (value) => void useTheme(value),
+    };
+  }
   for (const p of ordered()) {
     const had = mine[p.name];
     schema[`plugin-${p.name}`] = {
@@ -177,7 +259,7 @@ let settings = defineSettings();
 async function refreshSettings(): Promise<void> {
   loading = true;
   settings = defineSettings();
-  const ok = await refresh();
+  const [ok] = await Promise.all([refresh(), refreshThemes()]);
   loading = false;
   settings = defineSettings();
   phoenix.ui.toast(ok ? `Ultracord: ${status()}` : 'Could not reach Ultracord.');
@@ -269,6 +351,16 @@ const removeButton = phoenix.ui.addHeaderButton({
 phoenix.onUnload(() => {
   removeButton();
   page?.close();
+});
+
+// The saved stylesheet applies before the network answers, so Discord does not flash its own
+// colors first. A newer version of it replaces it once the theme list is in.
+const applied = phoenix.storage.get<AppliedTheme>('appliedTheme');
+if (themes && applied) themes.setCss(applied.css);
+void refreshThemes().then(() => {
+  settings = defineSettings();
+  const latest = applied && themeCatalog.find((t) => t.name === applied.name);
+  if (latest && compare(latest.version, applied.version) > 0) void useTheme(latest.name, true);
 });
 
 void refresh().then((ok) => {

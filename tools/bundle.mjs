@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
 import { build } from 'esbuild';
 import { forbiddenIn, inspect, listPlugins, pluginsDir, root, takenNames } from './plugins.mjs';
+import { inspectTheme, listThemes } from './themes.mjs';
 
 const ASSETS = 'https://assets.ultracord.dev/';
 const dist = join(root, 'dist');
@@ -65,6 +66,35 @@ for (const name of await listPlugins()) {
 }
 
 await writeFile(join(out, 'index.json'), JSON.stringify(index, null, 2) + '\n');
+
+// Themes ship as their `.theme.css`, as written, and a catalog with each palette so the store
+// and the site can draw previews without fetching every file.
+const themesOut = join(dist, 'themes');
+await mkdir(themesOut, { recursive: true });
+const themeIndex = [];
+for (const name of await listThemes()) {
+  const theme = await inspectTheme(name);
+  if (theme.errors.length) {
+    console.error(`theme ${name}: run "npm run check" first\n  ${theme.errors.join('\n  ')}`);
+    process.exit(1);
+  }
+  const bytes = Buffer.from(theme.css, 'utf8');
+  await writeFile(join(themesOut, theme.file), bytes);
+  const { name: title, description, version, author } = theme.fields;
+  themeIndex.push({
+    name,
+    title,
+    description,
+    version,
+    author,
+    url: `${ASSETS}themes/${theme.file}`,
+    colors: theme.colors,
+    ...('radius-scale' in theme.values ? { radiusScale: Number(theme.values['radius-scale']) } : {}),
+    size: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  });
+}
+await writeFile(join(themesOut, 'index.json'), JSON.stringify(themeIndex, null, 2) + '\n');
 await writeFile(join(dist, 'version.json'), JSON.stringify({ plugins: crcs }, null, 2) + '\n');
 await writeFile(join(dist, '.nojekyll'), '');
 await writeFile(join(dist, 'index.html'),
@@ -73,3 +103,4 @@ await writeFile(join(dist, 'index.html'),
   '<p>Plugin files for <a href="https://ultracord.dev/">Ultracord</a>.</p>\n');
 
 console.log(`bundled ${index.map((p) => `${p.name}@${p.version}`).join(', ') || 'nothing'}`);
+console.log(`themes ${themeIndex.map((t) => `${t.name}@${t.version}`).join(', ') || 'none'}`);

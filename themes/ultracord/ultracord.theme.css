@@ -1,0 +1,17 @@
+/**
+ * @name Ultracord
+ * @description Ink black, bone text and a blood red accent, with sharper corners.
+ * @version 1.0.0
+ * @author Ultracord
+ */
+:root {
+  --bg-tertiary: #0b0b0d;
+  --bg-secondary: #111013;
+  --bg-primary: #141317;
+  --bg-elevated: #1c1a20;
+  --accent-color: #e3121b;
+  --text-normal: #f1ede6;
+  --text-muted: #b8b1a7;
+  --ui-border-color: #2a282f;
+  --radius-scale: 0.5;
+}

@@ -39,8 +39,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Themes
 
-Phoenix has no CSS, so themes need support from Sunbird itself. Theme submissions open as soon as
-it lands. See [`themes/`](themes).
+Sunbird recolors Discord on Windows desktop from `.theme.css` palettes. Pick one of Ultracord's
+themes in Ultracord's settings, under Theme. To write one, see [`themes/`](themes).
 
 ## License
 
