@@ -32,6 +32,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The whole history, for each theme's Added and Updated dates.
+          fetch-depth: 0
       # No dependency cache here: what gets published is always built from a clean install.
       - uses: actions/setup-node@v7
         with:

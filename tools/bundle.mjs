@@ -4,6 +4,7 @@
 //   plugins/index.json  every plugin with its metadata, access list and checksums
 //   version.json        { plugins: { name: crc32 } }, the shape Sunbird's update check reads
 // Bundles are not minified, so anyone can read exactly what they install.
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -69,6 +70,21 @@ for (const name of await listPlugins()) {
 
 await writeFile(join(out, 'index.json'), JSON.stringify(index, null, 2) + '\n');
 
+/**
+ * When a file was first and last committed, for the site's Added and Updated dates. Needs the
+ * whole history, which the deploy workflow checks out. Left out when git cannot tell.
+ */
+function commitDates(file) {
+  try {
+    const dates = execFileSync('git', ['log', '--follow', '--format=%cI', '--', file], { cwd: root, encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean);
+    return dates.length ? { added: dates.at(-1), updated: dates[0] } : {};
+  } catch {
+    return {};
+  }
+}
+
 // Themes ship as their `.theme.css`, as written, and a catalog with each palette so the store
 // and the site can draw previews without fetching every file.
 const themesOut = join(dist, 'themes');
@@ -85,6 +101,7 @@ for (const name of await listThemes()) {
   const { name: title, description, version, author, source, license } = theme.fields;
   themeIndex.push({
     name,
+    ...commitDates(`themes/${name}/${theme.file}`),
     title,
     description,
     version,
