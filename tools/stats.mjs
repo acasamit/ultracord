@@ -87,7 +87,9 @@ for (const [label, read] of [['downloads', downloads], ['comments and reactions'
   try {
     await read();
   } catch (err) {
-    console.warn(`stats: could not read the ${label}: ${err.message}`);
+    const message = `could not read the ${label}: ${err.message}`;
+    // In GitHub Actions, a warning annotation on the run, readable without opening the logs.
+    console.warn(process.env.GITHUB_ACTIONS ? `::warning title=stats::${message}` : `stats: ${message}`);
   }
 }
 
