@@ -1,8 +1,9 @@
 name: Sunbird 2208
 
 # Builds the `ultracord` branch of acasamit/sunbird (Sunbird with the fixes Discord Phoenix build
-# 2208 needs, see tools/sunbird-fork.mjs) and publishes it as Ultracord-2208.zip on a release.
-# Run it by hand after pushing a new `ultracord`. A rerun on the same commit replaces the zip.
+# 2208 needs, see tools/sunbird-fork.mjs) at the commit tools/sunbird-2208/ref pins, and publishes it
+# as Ultracord-2208.zip on a release. The fork script writes the pin, so pushing a new one releases
+# it. A rerun on the same commit replaces the zip.
 on:
   workflow_dispatch:
   push:
@@ -28,10 +29,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - id: pin
+        shell: bash
+        run: |
+          ref=$(tr -d '[:space:]' < tools/sunbird-2208/ref)
+          [[ $ref =~ ^[0-9a-f]{40}$ ]] || { echo "tools/sunbird-2208/ref is not a commit: $ref"; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
           repository: acasamit/sunbird
-          ref: ultracord
+          ref: ${{ steps.pin.outputs.ref }}
           path: sunbird
           persist-credentials: false
       - id: source
