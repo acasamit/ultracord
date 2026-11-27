@@ -4,6 +4,7 @@
 //   downloads  the `themes` release's assets, one per version, added up per theme
 //   comments   the thread `theme:<name>` in the "Theme comments" discussions, replies included
 //   reactions  the reactions on that thread, which giscus shows above the comments
+//   up, down   its 👍 and 👎, which the site turns into a share of positive ratings
 // A source that cannot be read is left out of the file instead of showing zeros.
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -53,7 +54,7 @@ async function discussions() {
     { owner: OWNER, repo: REPO },
   )).discussionCategories.nodes.find((c) => c.name.trim().toLowerCase() === CATEGORY.toLowerCase());
   if (!category) throw new Error(`no "${CATEGORY}" discussion category`);
-  for (const name of names) Object.assign(themes[name], { comments: 0, reactions: 0 });
+  for (const name of names) Object.assign(themes[name], { comments: 0, reactions: 0, up: 0, down: 0 });
 
   let after = null;
   do {
@@ -65,6 +66,7 @@ async function discussions() {
             nodes {
               title
               reactions { totalCount }
+              reactionGroups { content reactors { totalCount } }
               comments(first: 100) { totalCount nodes { replies { totalCount } } }
             }
           }
@@ -79,6 +81,9 @@ async function discussions() {
       const replies = thread.comments.nodes.reduce((sum, comment) => sum + comment.replies.totalCount, 0);
       theme.comments += thread.comments.totalCount + replies;
       theme.reactions += thread.reactions.totalCount;
+      const votes = (content) => thread.reactionGroups.find((group) => group.content === content)?.reactors.totalCount ?? 0;
+      theme.up += votes('THUMBS_UP');
+      theme.down += votes('THUMBS_DOWN');
     }
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
   } while (after);
@@ -95,4 +100,4 @@ for (const [label, read] of [['downloads', downloads], ['comments and reactions'
 }
 
 await writeFile(join(dir, 'stats.json'), JSON.stringify({ updated: new Date().toISOString(), themes }, null, 2) + '\n');
-console.log(`stats ${Object.entries(themes).map(([name, s]) => `${name} ${s.downloads ?? '-'}/${s.comments ?? '-'}/${s.reactions ?? '-'}`).join(', ')}`);
+console.log(`stats ${Object.entries(themes).map(([name, s]) => `${name} ${s.downloads ?? '-'}/${s.comments ?? '-'}/${s.up ?? '-'}-${s.down ?? '-'}`).join(', ')}`);
