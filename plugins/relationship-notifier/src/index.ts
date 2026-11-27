@@ -1,5 +1,5 @@
 // @description Notifies you when you lose a friend, a friend request, a server or a group
-// @version 1.2.0
+// @version 1.2.1
 // @author Ultracord
 
 const FRIEND = 1;
@@ -191,6 +191,8 @@ function report(kind: Kind, name: string, offline = false, picture?: string): vo
     // for servers like Discord does. Other runtimes ignore them.
     image: picture,
     imageShape: kind === 'server' ? 'square' : 'circle',
+    // Up until closed, so one that comes while Discord is in the background is still there.
+    durationMs: 0,
   };
   phoenix.ui.notify(options);
   if (me) phoenix.storage.set(`history:${me}`, [{ at: Date.now(), kind, name, offline }, ...history()].slice(0, HISTORY_MAX));
