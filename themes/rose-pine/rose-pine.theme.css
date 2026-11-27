@@ -1,0 +1,18 @@
+/**
+ * @name Rosé Pine
+ * @description Rosé Pine's dusky purples, pale lavender text and a soft rose accent.
+ * @version 1.0.0
+ * @author Ultracord
+ * @source https://rosepinetheme.com
+ * @license MIT, Copyright (c) 2021 Rosé Pine
+ */
+:root {
+  --bg-tertiary: #191724;
+  --bg-secondary: #1f1d2e;
+  --bg-primary: #191724;
+  --bg-elevated: #26233a;
+  --accent-color: #ebbcba;
+  --text-normal: #e0def4;
+  --text-muted: #908caa;
+  --ui-border-color: #403d52;
+}

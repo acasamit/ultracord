@@ -44,6 +44,17 @@ Create `themes/<name>/<name>.theme.css`, with a name in lowercase words joined b
 Colors can be hex, `rgb()` or `hsl()`. Every variable is optional: Sunbird derives the background
 levels you leave out from the ones you set.
 
+## Ports of other palettes
+
+A theme made from someone else's palette, like Dracula or Nord, credits it in the header: `@source`
+links to the original, and `@license` gives its license and copyright line. The site shows both on
+the theme's card. Only port a palette whose license allows it, such as MIT.
+
+```css
+ * @source https://draculatheme.com
+ * @license MIT, Copyright (c) 2016 Dracula Theme
+```
+
 `npm run check` refuses a theme that sets anything else, or whose text is hard to read on its
 backgrounds (under 4.5:1 for text, 3:1 for secondary text). To try one, put the file in Sunbird's
 themes folder (Sunbird's `desktop-themes` plugin has a button that opens it) and pick it there.

@@ -1,0 +1,18 @@
+/**
+ * @name Nord
+ * @description The Nord palette: arctic blue-grey backgrounds, snow white text and a frost blue accent.
+ * @version 1.0.0
+ * @author Ultracord
+ * @source https://www.nordtheme.com
+ * @license MIT, Copyright (c) 2016-present Sven Greb
+ */
+:root {
+  --bg-tertiary: #222730;
+  --bg-secondary: #282e38;
+  --bg-primary: #2e3440;
+  --bg-elevated: #3b4252;
+  --accent-color: #88c0d0;
+  --text-normal: #d8dee9;
+  --text-muted: #9aa4b6;
+  --ui-border-color: #434c5e;
+}

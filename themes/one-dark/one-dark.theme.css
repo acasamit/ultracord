@@ -1,0 +1,18 @@
+/**
+ * @name One Dark
+ * @description Atom's One Dark: cool slate greys, soft grey text and a sky blue accent.
+ * @version 1.0.0
+ * @author Ultracord
+ * @source https://github.com/atom/atom/tree/master/packages/one-dark-syntax
+ * @license MIT, Copyright (c) 2011-2022 GitHub Inc.
+ */
+:root {
+  --bg-tertiary: #181a1f;
+  --bg-secondary: #21252b;
+  --bg-primary: #282c34;
+  --bg-elevated: #2c313a;
+  --accent-color: #61afef;
+  --text-normal: #abb2bf;
+  --text-muted: #828997;
+  --ui-border-color: #3e4451;
+}

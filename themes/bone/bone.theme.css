@@ -1,0 +1,17 @@
+/**
+ * @name Bone
+ * @description Ultracord's light side: bone white paper, ink black text and the same blood red, with sharper corners.
+ * @version 1.0.0
+ * @author Ultracord
+ */
+:root {
+  --bg-tertiary: #ddd6ca;
+  --bg-secondary: #e8e2d8;
+  --bg-primary: #f1ede6;
+  --bg-elevated: #d6cec1;
+  --accent-color: #c8101a;
+  --text-normal: #141317;
+  --text-muted: #5e5850;
+  --ui-border-color: #c5bcad;
+  --radius-scale: 0.5;
+}

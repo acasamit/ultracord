@@ -1,0 +1,18 @@
+/**
+ * @name Tokyo Night
+ * @description Tokyo Night's city lights: deep night blues, soft lavender text and a bright blue accent.
+ * @version 1.0.0
+ * @author Ultracord
+ * @source https://github.com/enkia/tokyo-night-vscode-theme
+ * @license MIT, Copyright (c) 2018-present Enkia
+ */
+:root {
+  --bg-tertiary: #14141b;
+  --bg-secondary: #16161e;
+  --bg-primary: #1a1b26;
+  --bg-elevated: #24283b;
+  --accent-color: #7aa2f7;
+  --text-normal: #a9b1d6;
+  --text-muted: #787c99;
+  --ui-border-color: #363b54;
+}

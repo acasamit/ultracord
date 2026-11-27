@@ -128,6 +128,9 @@ export async function inspectTheme(name) {
   if (!NAME.test(name)) errors.push(`folder name must be lowercase words joined by dashes (got "${name}")`);
   for (const key of REQUIRED) if (!fields[key]) errors.push(`missing "@${key}" in the header comment`);
   if (fields.version && !SEMVER.test(fields.version)) errors.push(`@version must look like 1.2.3 (got "${fields.version}")`);
+  // A theme made from someone else's palette links to it and says under which license it is shared.
+  if (fields.source && !/^https:\/\/\S+$/.test(fields.source)) errors.push(`@source must be an https link (got "${fields.source}")`);
+  if (fields.source && !fields.license) errors.push('"@source" needs "@license": the original palette\'s license and copyright line');
 
   // One `:root` block of custom properties and comments, nothing else: no imports, URLs or other
   // selectors, which Sunbird would ignore anyway.

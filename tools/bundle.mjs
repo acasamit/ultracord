@@ -80,13 +80,14 @@ for (const name of await listThemes()) {
   }
   const bytes = Buffer.from(theme.css, 'utf8');
   await writeFile(join(themesOut, theme.file), bytes);
-  const { name: title, description, version, author } = theme.fields;
+  const { name: title, description, version, author, source, license } = theme.fields;
   themeIndex.push({
     name,
     title,
     description,
     version,
     author,
+    ...(source ? { source, license } : {}),
     url: `${ASSETS}themes/${theme.file}`,
     colors: theme.colors,
     ...('radius-scale' in theme.values ? { radiusScale: Number(theme.values['radius-scale']) } : {}),

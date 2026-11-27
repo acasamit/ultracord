@@ -1,0 +1,18 @@
+/**
+ * @name Dracula
+ * @description The Dracula palette: deep blue-violet backgrounds, a purple accent and near-white text.
+ * @version 1.0.0
+ * @author Ultracord
+ * @source https://draculatheme.com
+ * @license MIT, Copyright (c) 2016 Dracula Theme
+ */
+:root {
+  --bg-tertiary: #191a21;
+  --bg-secondary: #21222c;
+  --bg-primary: #282a36;
+  --bg-elevated: #343746;
+  --accent-color: #bd93f9;
+  --text-normal: #f8f8f2;
+  --text-muted: #6272a4;
+  --ui-border-color: #44475a;
+}
