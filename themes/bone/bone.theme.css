@@ -1,8 +1,9 @@
 /**
  * @name Bone
  * @description Ultracord's light side: bone white paper, ink black text and the same blood red, with sharper corners.
- * @version 1.0.0
+ * @version 1.0.1
  * @author Ultracord
+ * @mode light
  */
 :root {
   --bg-tertiary: #ddd6ca;

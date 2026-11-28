@@ -1,5 +1,5 @@
 // @description Every Ultracord theme in Discord's settings, applied in one press and kept up to date
-// @version 1.1.0
+// @version 1.2.0
 // @author Ultracord
 // @permissions http
 // @fetch assets.ultracord.dev
@@ -7,24 +7,19 @@
 // `@permissions http` is how Sunbird 0.3 grants requests; `@fetch` is the same grant on older
 // loaders, which read only that line.
 
-// The themes are the store's reviewed `.theme.css` palettes. Only the variables Sunbird reads are
-// taken from a downloaded theme and applied as a new stylesheet, so a theme can change colors,
-// corner rounding and the Nitro override, and nothing else.
+// The themes are the store's reviewed `.theme.css` palettes. Only their custom properties are
+// taken from a downloaded theme and applied as a new stylesheet: the ones in `:root`, and in
+// `.theme-dark` and `.theme-light` for each of Discord's modes, plus the `@mode` a light theme
+// pins. So a theme can change colors and corner rounding, and nothing else.
 
 const BASE = 'https://assets.ultracord.dev/themes/';
 const MAKER = 'https://ultracord.dev/create.html';
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const COLORS = [
-  'bg-tertiary',
-  'bg-secondary',
-  'bg-primary',
-  'bg-elevated',
-  'accent-color',
-  'text-normal',
-  'text-muted',
-  'ui-border-color',
-];
-const COLOR = /^(?:#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgb|hsl)a?\([\d\s.,%/a-z]+\))$/i;
+const KEY = /^[a-z][a-z0-9-]*$/;
+/** A color, a number, or `var()` of them. */
+const VALUE = /^[#a-z0-9\s.,%()/-]+$/i;
+type Scope = ':root' | '.theme-dark' | '.theme-light';
+const SCOPES: Scope[] = [':root', '.theme-dark', '.theme-light'];
 
 interface Listing {
   name: string;
@@ -70,22 +65,59 @@ function rank(t: Listing): number {
   return t.name === 'ultracord' ? 0 : t.source ? 2 : 1;
 }
 
-function allowed(key: string, value: string): boolean {
-  if (COLORS.includes(key)) return COLOR.test(value);
-  if (key === 'radius-scale') return /^\d+(?:\.\d+)?$/.test(value) && Number(value) <= 2.5;
-  if (key === 'override-nitro') return /^(?:true|false|on|off|1|0)$/i.test(value);
-  return false;
+/** The `selector { body }` blocks of `text`, one level deep. */
+function blocks(text: string): [string, string][] {
+  const out: [string, string][] = [];
+  let rest = text;
+  for (;;) {
+    const open = rest.indexOf('{');
+    if (open < 0) return out;
+    let depth = 0;
+    let end = open;
+    for (; end < rest.length; end++) {
+      if (rest[end] === '{') depth++;
+      else if (rest[end] === '}' && --depth === 0) break;
+    }
+    if (depth) return out;
+    out.push([rest.slice(0, open).trim(), rest.slice(open + 1, end)]);
+    rest = rest.slice(end + 1);
+  }
 }
 
-/** The theme's variables that Sunbird reads, as a stylesheet of their own. */
+/** The theme's custom properties, as a stylesheet of their own. */
 function clean(css: string): string {
-  const root = /:root\s*\{([^{}]*)\}/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''))?.[1] ?? '';
-  const vars: string[] = [];
-  for (const declaration of root.split(';')) {
-    const match = /^\s*--([a-z-]+)\s*:\s*(.+?)\s*$/.exec(declaration);
-    if (match && allowed(match[1], match[2])) vars.push(`--${match[1]}: ${match[2]};`);
+  const vars = new Map<Scope, Map<string, string>>(SCOPES.map((s) => [s, new Map()]));
+  const read = (selector: string, body: string, media: 'dark' | 'light' | null) => {
+    let scope = SCOPES.find((s) => s === selector);
+    if (!scope) return;
+    // Under `@media (prefers-color-scheme: light)`, `:root` is the light mode's.
+    if (media) {
+      if (scope === ':root') scope = `.theme-${media}`;
+      else if (scope !== `.theme-${media}`) return;
+    }
+    for (const declaration of body.split(';')) {
+      const match = /^\s*--([^:\s]+)\s*:\s*(.+?)\s*$/s.exec(declaration);
+      if (!match) continue;
+      const [, key, value] = match;
+      if (KEY.test(key) && VALUE.test(value) && !/url\(/i.test(value)) vars.get(scope)!.set(key, value.replace(/\s+/g, ' '));
+    }
+  };
+  for (const [selector, body] of blocks(css.replace(/\/\*[\s\S]*?\*\//g, ''))) {
+    const media = /^@media\s*\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)$/i.exec(selector);
+    if (media) {
+      const mode = media[1].toLowerCase() as 'dark' | 'light';
+      for (const [nested, inner] of blocks(body)) read(nested, inner, mode);
+    } else {
+      read(selector, body, null);
+    }
   }
-  return vars.length ? `:root { ${vars.join(' ')} }` : '';
+
+  const rules = SCOPES.filter((s) => vars.get(s)!.size).map(
+    (s) => `${s} { ${[...vars.get(s)!].map(([key, value]) => `--${key}: ${value};`).join(' ')} }`,
+  );
+  if (!rules.length) return '';
+  const mode = /@mode\s+(dark|light)\b/i.exec(/\/\*([\s\S]*?)\*\//.exec(css)?.[1] ?? '')?.[1].toLowerCase();
+  return `${mode ? `/* @mode ${mode} */ ` : ''}${rules.join(' ')}`;
 }
 
 const themes = phoenix.themes;

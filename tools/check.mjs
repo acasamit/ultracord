@@ -28,6 +28,7 @@ for (const theme of themes) {
   failed ||= theme.errors.length > 0;
   console.log(`${status.padEnd(4)} theme ${theme.name} ${theme.fields.version ?? ''}`);
   for (const error of theme.errors) console.log(`     - ${error}`);
+  for (const warning of theme.warnings) console.log(`     ! ${warning}`);
   themeRows.push(`| ${theme.name} | ${theme.fields.version ?? ''} | ${status} | ${Object.keys(theme.values).map((v) => `\`--${v}\``).join(' ') || 'none'} |`);
 }
 
@@ -36,6 +37,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
     ...results.flatMap((p) => p.errors.map((e) => `- \`${p.name}\`: ${e}`)),
     ...themes.flatMap((t) => t.errors.map((e) => `- theme \`${t.name}\`: ${e}`)),
   ];
+  const warnings = themes.flatMap((t) => t.warnings.map((w) => `- theme \`${t.name}\`: ${w}`));
   await appendFile(process.env.GITHUB_STEP_SUMMARY, [
     '## Plugin review report',
     '',
@@ -47,6 +49,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       ? ['## Themes', '', '| Theme | Version | Checks | Sets |', '|---|---|---|---|', ...themeRows, '']
       : []),
     ...(errors.length ? ['### Errors', '', ...errors, ''] : []),
+    ...(warnings.length ? ['### Warnings', '', ...warnings, ''] : []),
   ].join('\n') + '\n');
 }
 

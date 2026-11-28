@@ -1,8 +1,8 @@
 # Themes
 
-Sunbird themes Discord on Windows desktop: a theme is a palette, a `.theme.css` file whose
-`:root` block sets a few custom properties. Sunbird maps them onto everything Discord draws, so
-the colors change everywhere. Pictures, fonts and the layout stay as they are.
+Sunbird themes Discord on desktop: a theme is a palette, a `.theme.css` file of custom properties.
+Sunbird 0.3 writes them into Discord's own table of named colors, so the colors change everywhere.
+Pictures, fonts and the layout stay as they are.
 
 ## Writing one
 
@@ -30,6 +30,8 @@ with a name in lowercase words joined by dashes:
 }
 ```
 
+These broad colors each paint a whole family of Discord's colors:
+
 | Variable | What it colors |
 |---|---|
 | `--bg-tertiary` | the server list, the darkest level |
@@ -41,10 +43,58 @@ with a name in lowercase words joined by dashes:
 | `--text-muted` | secondary text |
 | `--ui-border-color` | separators |
 | `--radius-scale` | corner rounding, from 0 (square) to 2.5, 1 by default |
-| `--override-nitro` | `false` keeps the gradients of a Nitro client theme, which the theme covers by default |
 
 Colors can be hex, `rgb()` or `hsl()`. Every variable is optional: Sunbird derives the background
-levels you leave out from the ones you set.
+levels you leave out from the ones you set. Vencord and BetterDiscord names work too, like
+`--background-primary`, `--brand-experiment` or `--text-normal`, so the variables of many existing
+themes can be copied as they are.
+
+### One color at a time
+
+Any other `--<name>` sets that one color of Discord's, over what the broad colors gave it:
+
+```css
+:root {
+  --text-link: #8ab4f8;
+  --mention-background: rgb(227 18 27 / 0.2);
+  --channeltextarea-background: #1c1a20;
+}
+```
+
+`tools/themes.mjs` lists the names Sunbird writes itself. Others work when Discord has a color by
+that name, and the check warns about them so a reviewer can try them.
+
+### Your own palette
+
+A variable that `var()` reads is the theme's own, not one of Discord's:
+
+```css
+:root {
+  --mauve: #cba6f7;
+  --accent-color: var(--mauve);
+  --text-link: var(--mauve);
+}
+```
+
+### Dark and light
+
+Colors in `:root` apply in both of Discord's modes. A `.theme-light` block (or `.theme-dark`, or
+`@media (prefers-color-scheme: light)`) adds colors for one mode only, so a theme can follow the
+mode picked in Discord's settings:
+
+```css
+:root {
+  --bg-primary: #1e1e2e;
+  --text-normal: #cdd6f4;
+}
+.theme-light {
+  --bg-primary: #eff1f5;
+  --text-normal: #4c4f69;
+}
+```
+
+A light theme that does not change with the mode says so with `@mode light` in the header, so
+Sunbird shades it as a light theme (hovers get darker, not lighter).
 
 ## Ports of other palettes
 
@@ -60,6 +110,7 @@ the theme's card. Only port a palette whose license allows it, such as MIT.
 Raise `@version` whenever the file changes: the site's Download buttons serve each version from
 a GitHub release, which keeps one file per version and counts its downloads.
 
-`npm run check` refuses a theme that sets anything else, or whose text is hard to read on its
-backgrounds (under 4.5:1 for text, 3:1 for secondary text). To try one, put the file in Sunbird's
-themes folder (Sunbird's `desktop-themes` plugin has a button that opens it) and pick it there.
+`npm run check` refuses a theme with other rules than these blocks, or whose text is hard to read
+on its backgrounds (under 4.5:1 for text, 3:1 for secondary text), in each of its modes. To try
+one, put the file in Sunbird's themes folder (Sunbird's `desktop-themes` plugin has a button that
+opens it) and pick it there.

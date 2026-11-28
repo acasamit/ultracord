@@ -109,8 +109,13 @@ for (const name of await listThemes()) {
     ...(source ? { source, license } : {}),
     url: `${ASSETS}themes/${theme.file}`,
     download: `${RELEASE}${name}-${version}.theme.css`,
+    // The broad colors and the other tokens it sets, in its dark look (its light one with
+    // `@mode light`). A theme that follows Discord's mode has its light look too.
+    ...(theme.mode ? { mode: theme.mode } : {}),
     colors: theme.colors,
-    ...('radius-scale' in theme.values ? { radiusScale: Number(theme.values['radius-scale']) } : {}),
+    ...(Object.keys(theme.tokens).length ? { tokens: theme.tokens } : {}),
+    ...(theme.lightColors ? { light: { colors: theme.lightColors, tokens: theme.lightTokens } } : {}),
+    ...(typeof theme.radiusScale === 'number' ? { radiusScale: theme.radiusScale } : {}),
     size: bytes.length,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   });
