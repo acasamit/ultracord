@@ -1,7 +1,11 @@
 // @description Every Ultracord theme in Discord's settings, applied in one press and kept up to date
-// @version 1.0.1
+// @version 1.1.0
 // @author Ultracord
+// @permissions http
 // @fetch assets.ultracord.dev
+
+// `@permissions http` is how Sunbird 0.3 grants requests; `@fetch` is the same grant on older
+// loaders, which read only that line.
 
 // The themes are the store's reviewed `.theme.css` palettes. Only the variables Sunbird reads are
 // taken from a downloaded theme and applied as a new stylesheet, so a theme can change colors,
@@ -143,8 +147,14 @@ if (!themes?.supported()) {
       make: {
         type: 'button',
         title: 'Make your own',
-        description: 'Copies the link to the theme maker on ultracord.dev',
+        description: 'Opens the theme maker on ultracord.dev',
         onPress: () => {
+          // `openUrl` is desktop only and new in Sunbird 0.3; older loaders get the link copied.
+          const open = (phoenix.ui as { openUrl?(url: string): void }).openUrl;
+          if (open) {
+            open.call(phoenix.ui, MAKER);
+            return;
+          }
           phoenix.ui.copy(MAKER);
           phoenix.ui.toast('Link copied, open it in your browser');
         },
