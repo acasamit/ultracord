@@ -1,5 +1,5 @@
 // @description Every Ultracord theme in Discord's settings, applied in one press and kept up to date
-// @version 1.2.0
+// @version 1.2.1
 // @author Ultracord
 // @permissions http
 // @fetch assets.ultracord.dev
@@ -112,7 +112,10 @@ function clean(css: string): string {
     }
   }
 
-  const rules = SCOPES.filter((s) => vars.get(s)!.size).map(
+  // Sunbird 0.3.1 and older read every block and keep the last value, so the light colors go
+  // first: those versions then show the dark ones. Newer ones read each block for its mode.
+  const order: Scope[] = ['.theme-light', ':root', '.theme-dark'];
+  const rules = order.filter((s) => vars.get(s)!.size).map(
     (s) => `${s} { ${[...vars.get(s)!].map(([key, value]) => `--${key}: ${value};`).join(' ')} }`,
   );
   if (!rules.length) return '';

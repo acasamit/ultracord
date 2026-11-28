@@ -1,8 +1,12 @@
 # Themes
 
-Sunbird themes Discord on desktop: a theme is a palette, a `.theme.css` file of custom properties.
-Sunbird 0.3 writes them into Discord's own table of named colors, so the colors change everywhere.
-Pictures, fonts and the layout stay as they are.
+Sunbird themes Discord on desktop: a theme is a palette, a `.theme.css` file of custom properties,
+and the colors change everywhere. Pictures, fonts and the layout stay as they are.
+
+Sunbird 0.3.1 and older recolor what Discord draws from the broad colors below. The engine on
+Sunbird's main branch, in its next release, writes them into Discord's own table of named colors,
+which also brings one-color tweaks, `var()` and dark and light versions. Those sections say what
+older versions do with them.
 
 ## Writing one
 
@@ -62,7 +66,8 @@ Any other `--<name>` sets that one color of Discord's, over what the broad color
 ```
 
 `tools/themes.mjs` lists the names Sunbird writes itself. Others work when Discord has a color by
-that name, and the check warns about them so a reviewer can try them.
+that name, and the check warns about them so a reviewer can try them. Sunbird 0.3.1 and older skip
+these.
 
 ### Your own palette
 
@@ -76,20 +81,24 @@ A variable that `var()` reads is the theme's own, not one of Discord's:
 }
 ```
 
+Sunbird 0.3.1 and older skip a value that uses `var()`, so the check warns when a broad color does.
+
 ### Dark and light
 
 Colors in `:root` apply in both of Discord's modes. A `.theme-light` block (or `.theme-dark`, or
 `@media (prefers-color-scheme: light)`) adds colors for one mode only, so a theme can follow the
-mode picked in Discord's settings:
+mode picked in Discord's settings. The light colors go first: Sunbird 0.3.1 and older read every
+block and keep the last value of each variable, so they show the dark version, and the check
+refuses the other order.
 
 ```css
-:root {
-  --bg-primary: #1e1e2e;
-  --text-normal: #cdd6f4;
-}
 .theme-light {
   --bg-primary: #eff1f5;
   --text-normal: #4c4f69;
+}
+:root {
+  --bg-primary: #1e1e2e;
+  --text-normal: #cdd6f4;
 }
 ```
 

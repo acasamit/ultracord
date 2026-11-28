@@ -194,8 +194,11 @@ function blocks(text, errors) {
   return out;
 }
 
-/** The custom properties of each scope: `{ root, dark, light }`, each `{ name: value }`. */
-function parseScopes(body, errors) {
+/**
+ * The custom properties of each scope: `{ root, dark, light }`, each `{ name: value }`. `order`
+ * gets the scope of each block, in the file's order.
+ */
+function parseScopes(body, errors, order) {
   const scopes = { root: {}, dark: {}, light: {} };
   const read = (selector, inner, forced) => {
     const scope = SCOPES[selector];
@@ -209,6 +212,7 @@ function parseScopes(body, errors) {
       errors.push(`${selector} inside a ${forced} @media block never applies`);
       return;
     }
+    order.push(into);
     for (const declaration of inner.split(';')) {
       if (!declaration.trim()) continue;
       const match = /^\s*--([^:\s]+)\s*:\s*(.+?)\s*$/s.exec(declaration);
@@ -357,11 +361,23 @@ export async function inspectTheme(name) {
   // which Sunbird would ignore anyway.
   const body = css.replace(/\/\*[\s\S]*?\*\//g, '').trim();
   if (/url\(|@import|expression\(/i.test(body)) errors.push('a theme holds colors only: no url(), @import or scripts');
-  const scopes = parseScopes(body, errors);
+  const order = [];
+  const scopes = parseScopes(body, errors, order);
+  // Sunbird 0.3.1 and older read every block and keep the last value: with the light colors last,
+  // they would show them in dark mode too.
+  if (order.lastIndexOf('light') > Math.min(...['root', 'dark'].map((s) => order.indexOf(s)).filter((i) => i >= 0))) {
+    errors.push('put the light colors first, before :root and .theme-dark: Sunbird 0.3.1 and older keep the last value of each variable, whatever its block');
+  }
 
   const values = { ...scopes.root, ...scopes.dark, ...scopes.light };
   if (!Object.keys(values).length) errors.push('the theme sets no variable');
   const helpers = referenced(scopes);
+  for (const [key, names] of Object.entries(BASE)) {
+    const name = names.find((n) => n in values);
+    if (name && /var\(/i.test(values[name])) {
+      warnings.push(`--${name} uses var(), which Sunbird 0.3.1 and older skip: there ${key === name ? 'it' : `--${key}`} keeps Discord's color`);
+    }
+  }
   for (const key of Object.keys(values)) {
     if (key === 'override-nitro') {
       errors.push('--override-nitro is gone since Sunbird 0.3: remove it');
